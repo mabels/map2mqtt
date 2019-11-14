@@ -1,40 +1,11 @@
-use tokio::net::TcpListener;
-use tokio::prelude::*;
-use std::net::SocketAddr;
+// mod router;
+mod core_service;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let addr = "127.0.0.1:8080".parse::<SocketAddr>()?;
-    let mut listener = TcpListener::bind(&addr).await?;
+// use std::thread;
+// use std::time;
 
-    loop {
-        let (mut socket, _) = listener.accept().await?;
-
-        tokio::spawn(async move {
-            match socket.peer_addr() {
-                Ok(addr) => println!("Peer {}", addr),
-                Err(e) => println!("Error {}", e)
-            }
-            let mut buf = [0; 1024];
-
-            // In a loop, read data from the socket and write the data back.
-            loop {
-                let n = match socket.read(&mut buf).await {
-                    // socket closed
-                    Ok(n) if n == 0 => return,
-                    Ok(n) => n,
-                    Err(e) => {
-                        println!("failed to read from socket; err = {:?}", e);
-                        return;
-                    }
-                };
-
-                // Write the data back
-                if let Err(e) = socket.write_all(&buf[0..n]).await {
-                    println!("failed to write to socket; err = {:?}", e);
-                    return;
-                }
-            }
-        });
-    }
+fn main() {
+    env_logger::init();
+    let core_service_thread = core_service::start("127.0.0.1:4799".to_string()).unwrap();
+    core_service_thread.join().unwrap();
 }
