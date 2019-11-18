@@ -1,6 +1,114 @@
 import { Router, RouterMsgType, RouterMsg, EmitRecv } from "./router";
 import * as rx from "rxjs";
 import { LogMsgType } from "./log";
+import { Msg } from "./msg";
+
+interface UnsubscriberTestProps {
+  msgFactory(id: string): Buffer;
+  subscribe(rt: Router, ep: string, cb: (buf: Buffer | Msg<unknown>) => void);
+  expect(e: string, buf: Buffer | Msg<unknown>);
+}
+
+async function unsubscriberTest(props: UnsubscriberTestProps) {
+  const rt = new Router();
+  const ep: EmitRecv<Buffer, Buffer> = {
+    addr: "test1",
+    emitter: new rx.Subject(),
+    receiver: new rx.Subject()
+  };
+  rt.register(ep);
+  await new Promise((rs, rj) => {
+    try {
+      let calledWithoutUnsub = 0;
+      let calledWithUnsub = 0;
+      props.subscribe(rt, ep.addr, buf => {
+        try {
+          ++calledWithoutUnsub;
+          props.expect(`msg${calledWithoutUnsub}`, buf);
+          if (calledWithoutUnsub == 2) {
+            expect(calledWithUnsub).toBe(1);
+            rs();
+          }
+        } catch (e) {
+          rj(e);
+        }
+      });
+      const unsub = props.subscribe(rt, ep.addr, buf => {
+        try {
+          calledWithUnsub++;
+          props.expect("msg1", buf);
+          unsub();
+        } catch (e) {
+          rj(e);
+        }
+      });
+      ep.emitter.next(props.msgFactory("msg1"));
+      ep.emitter.next(props.msgFactory("msg2"));
+    } catch (e) {
+      rj(e);
+    }
+  });
+}
+
+
+interface SubscriberTestProps {
+  msgFactory(id: string): Buffer;
+  subscribe(rt: Router, ep: string, cb: (buf: Buffer | Msg<unknown>) => void);
+  expect(e: string, buf: Buffer | Msg<unknown>);
+}
+
+
+async function subscriberTest(props: SubscriberTestProps) {
+  return new Promise((rs, rj) => {
+    const rt = new Router();
+    const msgs = 10;
+    const routes: EmitRecv[] = [
+      {
+        addr: "test1",
+        emitter: new rx.Subject(),
+        receiver: new rx.Subject()
+      },
+      {
+        addr: "test2",
+        emitter: new rx.Subject(),
+        receiver: new rx.Subject()
+      }
+    ];
+    let totalCount = 0;
+    routes.forEach(ep => {
+      rt.register(ep);
+      const unsub = props.subscribe(rt, ep.addr, buf => {
+        try {
+          props.expect(`msg:${ep.addr}:${totalCount++ % msgs}`, buf);
+          if (
+            routes[routes.length - 1].addr === ep.addr &&
+            totalCount >= routes.length * msgs
+          ) {
+            unsub();
+            // send after unsup
+            routes.forEach(ep => {
+              Array(msgs)
+                .fill(undefined)
+                .forEach((_, i) => {
+                  ep.emitter.next(props.msgFactory(`msg:${ep.addr}:${i}`) as any);
+                });
+            });
+            setTimeout(rs, 50);
+          }
+        } catch (e) {
+          rj(e);
+        }
+      });
+    });
+    routes.forEach(ep => {
+      Array(msgs)
+        .fill(undefined)
+        .forEach((_, i) => {
+          ep.emitter.next(props.msgFactory(`msg:${ep.addr}:${i}`));
+        });
+    });
+  });
+}
 
 test("router addr", () => {
   const r1 = new Router();
@@ -22,14 +130,14 @@ test("router dispose", async () => {
     rt.unregister({
       addr: rt.addr,
       emitter: new rx.Subject(),
-      receiver: new rx.Subject(),
+      receiver: new rx.Subject()
     });
     rt.dispose();
     // test is Router stopped
     rt.unregister({
       addr: rt.addr,
       emitter: new rx.Subject(),
-      receiver: new rx.Subject(),
+      receiver: new rx.Subject()
     });
     setTimeout(() => {
       rs();
@@ -46,7 +154,7 @@ test("router test unregistered nextBuffer", async () => {
           dst: "Test",
           payload: "endpoint was not found Test",
           src: rt.addr,
-          type: "log.error",
+          type: "log.error"
         });
         rs();
         return;
@@ -66,17 +174,16 @@ test("router test unregistered subscribeBuffer", async () => {
           dst: "Test",
           payload: "endpoint was not found Test",
           src: rt.addr,
-          type: "log.error",
+          type: "log.error"
         });
         rs();
         return;
       }
       rj("never called");
     });
-    rt.subscribeBuffer('Test', msg => {});
+    rt.subscribeBuffer("Test", msg => {});
   });
 });
-
 
 test("router test unregistered next", async () => {
   return new Promise((rs, rj) => {
@@ -87,7 +194,7 @@ test("router test unregistered next", async () => {
           dst: "Test",
           payload: "endpoint was not found Test",
           src: rt.addr,
-          type: "log.error",
+          type: "log.error"
         });
         rs();
         return;
@@ -96,12 +203,12 @@ test("router test unregistered next", async () => {
     });
     rt.next({
       src: rt.addr,
-      dst: 'Test',
-      type: 'Test',
-      payload: 'Test'
+      dst: "Test",
+      type: "Test",
+      payload: "Test"
     });
   });
-})
+});
 
 test("router test unregistered nextBuffer", async () => {
   return new Promise((rs, rj) => {
@@ -112,16 +219,16 @@ test("router test unregistered nextBuffer", async () => {
           dst: "Test",
           payload: "endpoint was not found Test",
           src: rt.addr,
-          type: "log.error",
+          type: "log.error"
         });
         rs();
         return;
       }
       rj("never called");
     });
-    rt.nextBuffer("Test", Buffer.from('Test'));
+    rt.nextBuffer("Test", Buffer.from("Test"));
   });
-})
+});
 
 test("router test unregistered next", async () => {
   return new Promise((rs, rj) => {
@@ -132,7 +239,7 @@ test("router test unregistered next", async () => {
           dst: "Test",
           payload: "endpoint was not found Test",
           src: rt.addr,
-          type: "log.error",
+          type: "log.error"
         });
         rs();
         return;
@@ -141,13 +248,12 @@ test("router test unregistered next", async () => {
     });
     rt.next({
       src: rt.addr,
-      dst: 'Test',
-      type: 'Test',
-      payload: 'Test'
+      dst: "Test",
+      type: "Test",
+      payload: "Test"
     });
   });
-})
-
+});
 
 test("router test register unregister ", async () => {
   return new Promise((rs, rj) => {
@@ -162,10 +268,10 @@ test("router test register unregister ", async () => {
             dst: addr,
             payload: {
               addr: addr,
-              msg: `unregister was not found:${addr}`,
+              msg: `unregister was not found:${addr}`
             },
             type: msg.type,
-            src: rt.addr,
+            src: rt.addr
           });
           return;
         }
@@ -178,7 +284,7 @@ test("router test register unregister ", async () => {
             dst: "*",
             payload: msg.payload,
             type: msg.type,
-            src: rt.addr,
+            src: rt.addr
           });
           return;
         }
@@ -191,7 +297,7 @@ test("router test register unregister ", async () => {
             dst: "*",
             payload: msg.payload,
             type: msg.type,
-            src: rt.addr,
+            src: rt.addr
           });
           return;
         }
@@ -204,10 +310,10 @@ test("router test register unregister ", async () => {
             dst: addr,
             payload: {
               addr: addr,
-              msg: `unregister was not found:${addr}`,
+              msg: `unregister was not found:${addr}`
             },
             type: msg.type,
-            src: rt.addr,
+            src: rt.addr
           });
           return;
         }
@@ -220,12 +326,12 @@ test("router test register unregister ", async () => {
             dst: "*",
             payload: msg.payload,
             type: msg.type,
-            src: rt.addr,
+            src: rt.addr
           });
           return;
         }
         fail("never reached");
-      },
+      }
     ];
     rt.emitter.subscribe(msg => {
       expect(msg.src).toBe(rt.addr);
@@ -247,35 +353,35 @@ test("router test register unregister ", async () => {
       rt.unregister({
         addr: j,
         emitter: new rx.Subject(),
-        receiver: new rx.Subject(),
+        receiver: new rx.Subject()
       })
     );
     toRegister.forEach(j =>
       rt.register({
         addr: j,
         emitter: new rx.Subject(),
-        receiver: new rx.Subject(),
+        receiver: new rx.Subject()
       })
     );
     toRegister.forEach(j =>
       rt.unregister({
         addr: j,
         emitter: new rx.Subject(),
-        receiver: new rx.Subject(),
+        receiver: new rx.Subject()
       })
     );
     toRegister.forEach(j =>
       rt.unregister({
         addr: j,
         emitter: new rx.Subject(),
-        receiver: new rx.Subject(),
+        receiver: new rx.Subject()
       })
     );
     toRegister.forEach(j =>
       rt.register({
         addr: j,
         emitter: new rx.Subject(),
-        receiver: new rx.Subject(),
+        receiver: new rx.Subject()
       })
     );
   });
@@ -289,13 +395,13 @@ test("nextBuffer", async () => {
       {
         addr: "test1",
         emitter: new rx.Subject(),
-        receiver: new rx.Subject(),
+        receiver: new rx.Subject()
       },
       {
         addr: "test2",
         emitter: new rx.Subject(),
-        receiver: new rx.Subject(),
-      },
+        receiver: new rx.Subject()
+      }
     ];
     let totalCount = 0;
     routes.forEach(ep => {
@@ -326,54 +432,70 @@ test("nextBuffer", async () => {
   });
 });
 
-test("subscribeBuffer", () => {
-  return new Promise((rs, rj) => {
-    const rt = new Router();
-    const msgs = 10;
-    const routes: EmitRecv[] = [
-      {
-        addr: "test1",
-        emitter: new rx.Subject(),
-        receiver: new rx.Subject(),
-      },
-      {
-        addr: "test2",
-        emitter: new rx.Subject(),
-        receiver: new rx.Subject(),
-      },
-    ];
-    let totalCount = 0;
-    console.log(`1:xxx`);
-    routes.forEach(ep => {
-      console.log(`2:xxx`);
-      rt.register(ep);
-      console.log(`3:xxx`);
-      rt.subscribeBuffer(ep.addr, buf => {
-        console.log(`xxxx`, ep.addr, buf);
-        try {
-          expect(buf.toString()).toBe(`${ep.addr}:${totalCount++ % msgs}`);
-          if (
-            routes[routes.length - 1].addr === ep.addr &&
-            totalCount >= routes.length * msgs
-          ) {
-            rs();
-          }
-        } catch (e) {
-          rj(e);
-        }
-      });
-    });
-    console.log(``);
-    routes.forEach(ep => {
-      Array(msgs)
-        .fill(undefined)
-        .forEach((_, i) => {
-          rt.nextBuffer(ep.addr, Buffer.from(`msg:${ep.addr}:${i}`));
-        });
-    });
+test("unsubscribe subscribeBuffer", async () => {
+  return unsubscriberTest({
+    msgFactory: (id: string): Buffer => {
+      return Buffer.from(id);
+    },
+    subscribe: (
+      rt: Router,
+      ep: string,
+      cb: (buf: Buffer | RouterMsg) => void
+    ) => {
+      return rt.subscribeBuffer(ep, cb);
+    },
+    expect: (e: string, buf: Buffer | RouterMsg) => {
+      expect(buf.toString()).toBe(e);
+    }
   });
+});
 
-  //public subscribeBuffer(endPoint: string, msg: BufferCb): StopHandler {
+test("unsubscribe subscribe", async () => {
+  return unsubscriberTest({
+    msgFactory(id: string): Buffer {
+      return Buffer.from(JSON.stringify({
+        src: "test1",
+        dst: "*",
+        type: "register.error",
+        payload: {
+          addr: "oo",
+          msg: id
+        }
+      }));
+    },
+    subscribe(
+      rt: Router,
+      ep: string,
+      cb: (buf: Buffer | Msg<unknown>) => void
+    ) {
+      return rt.subscribe(ep, msg => cb(msg));
+    },
+    expect(e: string, buf: Buffer | RouterMsg) {
+      expect(buf).toEqual({
+           dst: "*",
+           payload: {
+             addr: "oo",
+             msg: e
+           },
+           src: "test1",
+           type: "register.error",
+      });
+    }
+  });
+});
+
+test("subscribeBuffer", () => {
+  return subscriberTest({
+    msgFactory(id: string): Buffer {
+      return Buffer.from(id);
+    },
+    subscribe(rt: Router, ep: string, cb: (buf: Buffer | Msg<unknown>) => void) {
+      return rt.subscribeBuffer(ep, cb);
+    },
+    expect(e: string, buf: Buffer | Msg<unknown>) {
+      expect(buf.toString()).toBe(e);
+    }
+  });
 });
 
 test("next", async () => {
@@ -384,13 +506,13 @@ test("next", async () => {
       {
         addr: "test1",
         emitter: new rx.Subject(),
-        receiver: new rx.Subject(),
+        receiver: new rx.Subject()
       },
       {
         addr: "test2",
         emitter: new rx.Subject(),
-        receiver: new rx.Subject(),
-      },
+        receiver: new rx.Subject()
+      }
     ];
     let totalCount = 0;
     routes.forEach(ep => {
@@ -402,7 +524,7 @@ test("next", async () => {
             src: `src:${ep.addr}:${i}`,
             dst: ep.addr,
             type: `type:${ep.addr}:${i}`,
-            payload: `payload:${ep.addr}:${i}`,
+            payload: `payload:${ep.addr}:${i}`
           });
           if (
             routes[routes.length - 1].addr === ep.addr &&
@@ -423,7 +545,7 @@ test("next", async () => {
             src: `src:${ep.addr}:${i}`,
             dst: ep.addr,
             type: `type:${ep.addr}:${i}`,
-            payload: `payload:${ep.addr}:${i}`,
+            payload: `payload:${ep.addr}:${i}`
           });
         });
     });
@@ -432,5 +554,31 @@ test("next", async () => {
 });
 
 test("subscribe", () => {
-  //public subscribe<T>(endPoint: string, msgCb: MsgCb<T>): StopHandler {
+  return subscriberTest({
+    msgFactory(id: string): Buffer {
+      return Buffer.from(JSON.stringify({
+        src: "test1",
+        dst: "*",
+        type: "register.error",
+        payload: {
+          addr: "oo",
+          msg: id
+        }
+      }));
+    },
+    subscribe(rt: Router, ep: string, cb: (buf: Buffer | Msg<unknown>) => void) {
+      return rt.subscribe(ep, cb);
+    },
+    expect(e: string, buf: Buffer | Msg<unknown>) {
+      expect(buf).toEqual({
+           dst: "*",
+           payload: {
+             addr: "oo",
+             msg: e
+           },
+           src: "test1",
+           type: "register.error"
+      });
+    }
+  });
 });

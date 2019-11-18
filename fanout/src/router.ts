@@ -4,7 +4,7 @@ import * as rx from 'rxjs';
 import * as uuid from 'uuid';
 import { LogWarn, LogError, LogMsg, LogMsgStr } from './log';
 
-export interface EmitRecv<E = Msg<unknown>, R = Msg<unknown>> {
+export interface EmitRecv<E = unknown, R = unknown> {
   readonly addr: string;
   readonly emitter: rx.Subject<E>;
   readonly receiver: rx.Subject<R>;
