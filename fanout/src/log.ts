@@ -1,5 +1,6 @@
-import { EmitRecv } from './router';
+import { EmitRecv, DstTransaction, SrcTransaction } from './msg';
 import { Msg } from './msg';
+import uuid = require('uuid');
 
 
 export enum LogMsgType {
@@ -9,22 +10,39 @@ export enum LogMsgType {
 
 export type LogMsgStr = 'log.warn' | 'log.error';
 export interface LogMsg extends Msg<string> {
-  type: LogMsgStr;
+  readonly type: LogMsgStr;
 }
 
-export function LogWarn<E, R>(e: EmitRecv<E, R>, msg: string, dst = '*') {
+export interface LogOptionsOptional {
+  readonly dst?: string;
+  readonly transaction?: string;
+}
+
+export interface LogOptions {
+  readonly dst?: string;
+  readonly transaction?: string;
+}
+
+function buildDstAndTransaction(msg?: SrcTransaction): LogOptions {
+  return {
+    dst: (msg && msg.src) || '*',
+    transaction: (msg && msg.transaction) || uuid.v4()
+  };
+}
+
+export function LogWarn<E, R>(e: EmitRecv<E, R>, msg: string, srcMsg?: SrcTransaction) {
   e.emitter.next({
     src: e.addr,
-    dst,
+    ...buildDstAndTransaction(srcMsg),
     type: LogMsgType.Warn,
     payload: msg
   } as unknown as E);
 }
 
-export function LogError<E, R>(e: EmitRecv<E, R>, msg: string, dst = '*') {
+export function LogError<E, R>(e: EmitRecv<E, R>, msg: string, srcMsg?: SrcTransaction) {
   e.emitter.next({
     src: e.addr,
-    dst,
+    ...buildDstAndTransaction(srcMsg),
     type: LogMsgType.Error,
     payload: msg
   } as unknown as E);
