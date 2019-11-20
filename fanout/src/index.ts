@@ -15,14 +15,16 @@ import { Msg } from './msg';
     let stopHandler: StopHandler;
     switch (msg.type) {
       case IotTcpConnectionType.Connected:
-        stopHandler = rm.subscribeBuffer(my.payload, buffer => {
-          rm.next(mqtt.addr, {
-            src: my.src,
-            dst: mqtt.addr,
-            type: undefined,
-            payload: undefined
+        stopHandler = rm.subscribeBuffer({
+          ep: my.payload, msg: buffer => {
+            rm.next(mqtt.addr, {
+              src: my.src,
+              dst: mqtt.addr,
+              type: undefined,
+              payload: undefined
+            });
+          }
           });
-        });
         break;
       case IotTcpConnectionType.Disconnected:
         stopHandler();

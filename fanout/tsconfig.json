@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES6",
+    "module": "commonjs",
+    "outDir": "dist",
+    "jsx": "react",
+    "experimentalDecorators": true,
+    "noImplicitAny": true,
+    "pretty": true,
+    "sourceMap": true,
+    "declaration": true,
+    "moduleResolution": "node",
+    "stripInternal": true,
+    "noEmit": false,
+    "types": ["jest"],
+    "plugins": [{ "name": "typescript-tslint-plugin" }]
+  },
+  "include": ["**/*.ts", "**/*.vue", "**/*.riot"],
+  "exclude": [
+    "**/*.test-helper.ts",
+    "**/*.test-helper.tsx",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "./node_modules"
+  ]
+}
